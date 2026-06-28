@@ -137,6 +137,6 @@ app.add_handler(CommandHandler("done", mark_done))
 print("Bot running...")
 
 # Schedule check-in every 1 minute (for testing)
-app.job_queue.run_repeating(daily_checkin, interval=6660, first=10)
+app.job_queue.run_repeating(daily_checkin, interval=66660, first=10)
 
 app.run_polling()

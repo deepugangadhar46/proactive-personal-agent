@@ -1,36 +1,135 @@
-Proactive Personal Agent 🤖
-A Telegram-based autonomous task agent that:
+# 🤖 Proactive Personal Agent
 
-✅ Stores tasks with deadlines
-✅ Sends proactive daily check-ins
-✅ Supports natural language task detection
-✅ Runs 24/7 (cloud deploy ready)
-🚀 Features
-Add tasks manually or via natural language
-Deadline-aware reminders
-SQLite persistence
-Proactive scheduled notifications
-Secure token handling with .env
-🛠 Tech Stack
-Python
-python-telegram-bot
-SQLite
-APScheduler / JobQueue
-Render (Deployment)
-🔐 Setup
-Clone the repo
-Create a .env file:
-text
+An autonomous Telegram-based personal assistant that proactively tracks tasks, manages deadlines, and reminds users before they forget.
 
-TOKEN=your_telegram_bot_token
-Install dependencies:
-text
+## ✨ Features
 
+- ✅ Add tasks manually
+- ✅ Natural language task detection
+- ✅ Deadline-aware reminders
+- ✅ Proactive daily check-ins
+- ✅ SQLite-based persistent storage
+- ✅ Secure environment variable handling
+- ✅ Cloud deployment ready
+
+---
+
+## 🚀 Demo
+
+> Coming soon
+
+---
+
+## 🛠️ Tech Stack
+
+| Technology | Purpose |
+|------------|---------|
+| Python | Core application logic |
+| python-telegram-bot | Telegram bot framework |
+| SQLite | Local data persistence |
+| APScheduler / JobQueue | Task scheduling |
+| Python-dotenv | Environment management |
+| Render | Cloud deployment |
+
+---
+
+## 📂 Project Structure
+
+```bash
+proactive-personal-agent/
+│
+├── bot.py              # Main bot application
+├── requirements.txt    # Project dependencies
+├── .env                # Environment variables (not committed)
+├── .gitignore
+└── README.md
+```
+
+---
+
+## ⚙️ Installation
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/deepugangadhar46/proactive-personal-agent.git
+cd proactive-personal-agent
+```
+
+### 2. Create a virtual environment
+
+```bash
+python -m venv venv
+```
+
+Activate it:
+
+**Windows**
+```bash
+venv\Scripts\activate
+```
+
+**Linux/Mac**
+```bash
+source venv/bin/activate
+```
+
+### 3. Install dependencies
+
+```bash
 pip install -r requirements.txt
-Run:
-text
+```
 
+### 4. Configure environment variables
+
+Create a `.env` file:
+
+```env
+TOKEN=your_telegram_bot_token
+```
+
+### 5. Run the application
+
+```bash
 python bot.py
-📌 Status
-Currently building iteratively.
-Next goal: Intelligent task prioritization and planning loop.
+```
+
+---
+
+## 🎯 Current Features
+
+- Task creation
+- Deadline tracking
+- Daily proactive reminders
+- Persistent task storage
+
+---
+
+## 🔮 Planned Features
+
+- 🧠 Intelligent task prioritization
+- 📅 Automatic schedule planning
+- 🤖 AI-powered task suggestions
+- 📊 Productivity analytics
+- 🔔 Smart reminder optimization
+- ☁️ Full cloud deployment
+
+---
+
+## 🏗️ Project Status
+
+🚧 Currently under active development.
+
+This project is being built iteratively to explore autonomous AI agents, proactive assistance, and personal productivity automation.
+
+---
+
+## 🤝 Contributing
+
+Contributions, suggestions, and feedback are welcome.
+
+---
+
+## 📜 License
+
+This project is licensed under the MIT License.
