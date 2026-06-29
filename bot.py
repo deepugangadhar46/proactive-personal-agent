@@ -6,8 +6,7 @@ from telegram.ext import MessageHandler, filters
 from datetime import datetime
 from datetime import time
 from dotenv import load_dotenv
-from flask import Flask
-from flask import request as flask_request
+from flask import Flask, request
 import os
 
 load_dotenv()
@@ -130,11 +129,6 @@ async def natural_language_handler(update: Update, context: ContextTypes.DEFAULT
 
 # ---------- WEBHOOK APP ----------
 
-flask_app = Flask(__name__)
-
-PORT = int(os.environ.get("PORT", 10000))
-RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL")
-
 app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
@@ -148,28 +142,29 @@ app.job_queue.run_daily(
     time=time(hour=20, minute=0)
 )
 
+flask_app = Flask(__name__)
 
-@flask_app.post(f"/{TOKEN}")
-async def webhook():
-    update = Update.de_json(flask_request.json, app.bot)
-    await app.process_update(update)
-    return "ok"
+PORT = int(os.environ.get("PORT", 10000))
+RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL")
 
 
-@flask_app.get("/")
+@flask_app.route(f"/{TOKEN}", methods=["POST"])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), app.bot)
+    app.update_queue.put(update)
+    return "ok", 200
+
+
+@flask_app.route("/")
 def health():
-    return "Bot is running"
+    return "Bot is running", 200
 
 
-async def setup_webhook():
+async def setup():
     await app.initialize()
-    await app.bot.set_webhook(url=f"{RENDER_EXTERNAL_URL.rstrip('/')}/{TOKEN}")
+    await app.bot.set_webhook(url=f"{RENDER_EXTERNAL_URL}/{TOKEN}")
 
 
 if __name__ == "__main__":
-    if RENDER_EXTERNAL_URL:
-        asyncio.run(setup_webhook())
-        flask_app.run(host="0.0.0.0", port=PORT)
-    else:
-        print("RENDER_EXTERNAL_URL is not set; starting in polling mode.")
-        app.run_polling()
+    asyncio.run(setup())
+    flask_app.run(host="0.0.0.0", port=PORT)
