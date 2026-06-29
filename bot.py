@@ -1,10 +1,13 @@
 import sqlite3
+import asyncio
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from telegram.ext import MessageHandler, filters
 from datetime import datetime
 from datetime import time
 from dotenv import load_dotenv
+from flask import Flask
+from flask import request as flask_request
 import os
 
 load_dotenv()
@@ -125,21 +128,48 @@ async def natural_language_handler(update: Update, context: ContextTypes.DEFAULT
 
         await update.message.reply_text(f"✅ Got it. Added task: {task}")
 
-# ---------- APP ----------
+# ---------- WEBHOOK APP ----------
+
+flask_app = Flask(__name__)
+
+PORT = int(os.environ.get("PORT", 10000))
+RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL")
 
 app = ApplicationBuilder().token(TOKEN).build()
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, natural_language_handler))
 
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("addtask", add_task))
 app.add_handler(CommandHandler("tasks", show_tasks))
 app.add_handler(CommandHandler("done", mark_done))
-
-print("Bot running...")
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, natural_language_handler))
 
 app.job_queue.run_daily(
     daily_checkin,
     time=time(hour=20, minute=0)
 )
 
-app.run_polling()
+
+@flask_app.post(f"/{TOKEN}")
+async def webhook():
+    update = Update.de_json(flask_request.json, app.bot)
+    await app.process_update(update)
+    return "ok"
+
+
+@flask_app.get("/")
+def health():
+    return "Bot is running"
+
+
+async def setup_webhook():
+    await app.initialize()
+    await app.bot.set_webhook(url=f"{RENDER_EXTERNAL_URL.rstrip('/')}/{TOKEN}")
+
+
+if __name__ == "__main__":
+    if RENDER_EXTERNAL_URL:
+        asyncio.run(setup_webhook())
+        flask_app.run(host="0.0.0.0", port=PORT)
+    else:
+        print("RENDER_EXTERNAL_URL is not set; starting in polling mode.")
+        app.run_polling()
