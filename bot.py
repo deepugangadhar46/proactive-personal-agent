@@ -177,22 +177,31 @@ flask_app = Flask(__name__)
 PORT = int(os.environ.get("PORT", 10000))
 RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL")
 
+# Create a global event loop
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+
+async def init_app():
+    await application.initialize()
+    await application.start()
+    await application.bot.set_webhook(
+        url=f"{RENDER_EXTERNAL_URL}/{TOKEN}"
+    )
+
+loop.run_until_complete(init_app())
+
+
 @flask_app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), application.bot)
-    asyncio.run(application.process_update(update))
+    loop.create_task(application.process_update(update))
     return "ok", 200
+
 
 @flask_app.route("/")
 def health():
     return "Bot is running", 200
 
-async def setup():
-    await application.initialize()
-    await application.bot.set_webhook(
-        url=f"{RENDER_EXTERNAL_URL}/{TOKEN}"
-    )
 
 if __name__ == "__main__":
-    asyncio.run(setup())
     flask_app.run(host="0.0.0.0", port=PORT)
