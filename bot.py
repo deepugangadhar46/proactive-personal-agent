@@ -162,6 +162,7 @@ def health():
 
 async def setup():
     await app.initialize()
+    await app.start()
     await app.bot.set_webhook(url=f"{RENDER_EXTERNAL_URL}/{TOKEN}")
 
 
