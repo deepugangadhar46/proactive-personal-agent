@@ -1,20 +1,34 @@
+import os
 import sqlite3
 import asyncio
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from telegram.ext import MessageHandler, filters
-from datetime import datetime
-from datetime import time
+from datetime import datetime, timedelta, time
+
 from dotenv import load_dotenv
 from flask import Flask, request
-import os
+
+from telegram import Update
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    ContextTypes,
+    filters,
+)
+
+# ==============================
+# LOAD ENV
+# ==============================
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 
+if not TOKEN:
+    raise ValueError("TOKEN not found in environment variables.")
 
+# ==============================
+# DATABASE SETUP
+# ==============================
 
-# ---------- DATABASE SETUP ----------
 conn = sqlite3.connect("tasks.db", check_same_thread=False)
 cursor = conn.cursor()
 
@@ -28,20 +42,20 @@ CREATE TABLE IF NOT EXISTS tasks (
 """)
 conn.commit()
 
-
-# ---------- COMMANDS ----------
+# ==============================
+# COMMAND HANDLERS
+# ==============================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    print("Your Chat ID:", chat_id)
-
     await update.message.reply_text(
-        "Personal AI Agent v0.2 🚀\n\n"
-        "Proactive mode loading..."
+        "🤖 Proactive Personal Agent\n\n"
+        "Commands:\n"
+        "/addtask Task | YYYY-MM-DD\n"
+        "/tasks\n"
+        "/done <id>"
     )
 
 
-    
 async def add_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = " ".join(context.args)
 
@@ -57,27 +71,28 @@ async def add_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     cursor.execute(
         "INSERT INTO tasks (task, deadline, status) VALUES (?, ?, ?)",
-        (task, deadline, "pending")
+        (task, deadline, "pending"),
     )
     conn.commit()
 
     await update.message.reply_text(f"✅ Task added: {task}")
+
 
 async def show_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cursor.execute("SELECT * FROM tasks WHERE status='pending'")
     tasks = cursor.fetchall()
 
     if not tasks:
-        await update.message.reply_text("No pending tasks 🎉")
+        await update.message.reply_text("🎉 No pending tasks.")
         return
 
-    message = "Your Pending Tasks:\n\n"
-
+    message = "📋 Pending Tasks:\n\n"
     for task in tasks:
         deadline_info = f" (Due: {task[2]})" if task[2] else ""
         message += f"{task[0]}. {task[1]}{deadline_info}\n"
 
     await update.message.reply_text(message)
+
 
 async def mark_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
@@ -91,80 +106,92 @@ async def mark_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"✅ Task {task_id} marked as done!")
 
-CHAT_ID = 1265910148
+
+async def natural_language_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.lower()
+
+    deadline = None
+    if "tomorrow" in text:
+        deadline = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    if "i need to" in text or "i have to" in text:
+        task = (
+            text.replace("i need to", "")
+            .replace("i have to", "")
+            .strip()
+        )
+
+        cursor.execute(
+            "INSERT INTO tasks (task, deadline, status) VALUES (?, ?, ?)",
+            (task, deadline, "pending"),
+        )
+        conn.commit()
+
+        await update.message.reply_text(f"✅ Added task: {task}")
+
+# ==============================
+# DAILY CHECK-IN
+# ==============================
+
+CHAT_ID = 1265910148  # Keep your chat ID
 
 async def daily_checkin(context: ContextTypes.DEFAULT_TYPE):
     cursor.execute("SELECT * FROM tasks WHERE status='pending'")
     tasks = cursor.fetchall()
 
     if not tasks:
-        message = "🎉 You have no pending tasks. Good job!"
+        message = "🎉 No pending tasks today. Great job!"
     else:
         message = "👋 Daily Check-in\n\nYou still have:\n\n"
         for task in tasks:
             message += f"{task[0]}. {task[1]}\n"
-        message += "\nDid you complete any of them?"
+        message += "\nDid you complete any?"
 
     await context.bot.send_message(chat_id=CHAT_ID, text=message)
 
-async def natural_language_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.lower()
+# ==============================
+# TELEGRAM APPLICATION
+# ==============================
 
-    if "tomorrow" in text:
-        from datetime import datetime, timedelta
-        deadline = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
-    else:
-        deadline = None
+application = ApplicationBuilder().token(TOKEN).build()
 
-    if "i need to" in text or "i have to" in text:
-        task = text.replace("i need to", "").replace("i have to", "").strip()
-
-        cursor.execute(
-            "INSERT INTO tasks (task, deadline, status) VALUES (?, ?, ?)",
-            (task, deadline, "pending")
-        )
-        conn.commit()
-
-        await update.message.reply_text(f"✅ Got it. Added task: {task}")
-
-# ---------- WEBHOOK APP ----------
-
-app = ApplicationBuilder().token(TOKEN).build()
-
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("addtask", add_task))
-app.add_handler(CommandHandler("tasks", show_tasks))
-app.add_handler(CommandHandler("done", mark_done))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, natural_language_handler))
-
-app.job_queue.run_daily(
-    daily_checkin,
-    time=time(hour=20, minute=0)
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("addtask", add_task))
+application.add_handler(CommandHandler("tasks", show_tasks))
+application.add_handler(CommandHandler("done", mark_done))
+application.add_handler(
+    MessageHandler(filters.TEXT & ~filters.COMMAND, natural_language_handler)
 )
+
+application.job_queue.run_daily(
+    daily_checkin,
+    time=time(hour=20, minute=0),
+)
+
+# ==============================
+# FLASK WEBHOOK SERVER
+# ==============================
 
 flask_app = Flask(__name__)
 
 PORT = int(os.environ.get("PORT", 10000))
 RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL")
 
-
 @flask_app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
-    update = Update.de_json(request.get_json(force=True), app.bot)
-    app.update_queue.put(update)
+    update = Update.de_json(request.get_json(force=True), application.bot)
+    asyncio.run(application.process_update(update))
     return "ok", 200
-
 
 @flask_app.route("/")
 def health():
     return "Bot is running", 200
 
-
 async def setup():
-    await app.initialize()
-    await app.start()
-    await app.bot.set_webhook(url=f"{RENDER_EXTERNAL_URL}/{TOKEN}")
-
+    await application.initialize()
+    await application.bot.set_webhook(
+        url=f"{RENDER_EXTERNAL_URL}/{TOKEN}"
+    )
 
 if __name__ == "__main__":
     asyncio.run(setup())
