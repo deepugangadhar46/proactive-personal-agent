@@ -3,6 +3,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from telegram.ext import MessageHandler, filters
 from datetime import datetime
+from datetime import time
 from dotenv import load_dotenv
 import os
 
@@ -136,7 +137,9 @@ app.add_handler(CommandHandler("done", mark_done))
 
 print("Bot running...")
 
-# Schedule check-in every 1 minute (for testing)
-app.job_queue.run_repeating(daily_checkin, interval=66660, first=10)
+app.job_queue.run_daily(
+    daily_checkin,
+    time=time(hour=20, minute=0)
+)
 
 app.run_polling()
