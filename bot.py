@@ -1,11 +1,8 @@
 import os
 import sqlite3
-import asyncio
 from datetime import datetime, timedelta, time
 
 from dotenv import load_dotenv
-from flask import Flask, request
-
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -26,7 +23,7 @@ if not TOKEN:
     raise ValueError("TOKEN not found in environment variables.")
 
 # ==============================
-# DATABASE SETUP
+# DATABASE
 # ==============================
 
 conn = sqlite3.connect("tasks.db", check_same_thread=False)
@@ -43,24 +40,22 @@ CREATE TABLE IF NOT EXISTS tasks (
 conn.commit()
 
 # ==============================
-# COMMAND HANDLERS
+# COMMANDS
 # ==============================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🤖 Proactive Personal Agent\n\n"
-        "Commands:\n"
         "/addtask Task | YYYY-MM-DD\n"
         "/tasks\n"
         "/done <id>"
     )
 
-
 async def add_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = " ".join(context.args)
 
     if not text:
-        await update.message.reply_text("Usage: /addtask Task name | YYYY-MM-DD")
+        await update.message.reply_text("Usage: /addtask Task | YYYY-MM-DD")
         return
 
     if "|" in text:
@@ -77,7 +72,6 @@ async def add_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"✅ Task added: {task}")
 
-
 async def show_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cursor.execute("SELECT * FROM tasks WHERE status='pending'")
     tasks = cursor.fetchall()
@@ -93,10 +87,9 @@ async def show_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(message)
 
-
 async def mark_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("Usage: /done <task_id>")
+        await update.message.reply_text("Usage: /done <id>")
         return
 
     task_id = context.args[0]
@@ -105,7 +98,6 @@ async def mark_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn.commit()
 
     await update.message.reply_text(f"✅ Task {task_id} marked as done!")
-
 
 async def natural_language_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.lower()
@@ -133,14 +125,14 @@ async def natural_language_handler(update: Update, context: ContextTypes.DEFAULT
 # DAILY CHECK-IN
 # ==============================
 
-CHAT_ID = 1265910148  # Keep your chat ID
+CHAT_ID = 1265910148  # keep your chat id
 
 async def daily_checkin(context: ContextTypes.DEFAULT_TYPE):
     cursor.execute("SELECT * FROM tasks WHERE status='pending'")
     tasks = cursor.fetchall()
 
     if not tasks:
-        message = "🎉 No pending tasks today. Great job!"
+        message = "🎉 No pending tasks today."
     else:
         message = "👋 Daily Check-in\n\nYou still have:\n\n"
         for task in tasks:
@@ -150,7 +142,7 @@ async def daily_checkin(context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=CHAT_ID, text=message)
 
 # ==============================
-# TELEGRAM APPLICATION
+# APP START
 # ==============================
 
 application = ApplicationBuilder().token(TOKEN).build()
@@ -168,40 +160,5 @@ application.job_queue.run_daily(
     time=time(hour=20, minute=0),
 )
 
-# ==============================
-# FLASK WEBHOOK SERVER
-# ==============================
-
-flask_app = Flask(__name__)
-
-PORT = int(os.environ.get("PORT", 10000))
-RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL")
-
-# Create a global event loop
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
-
-async def init_app():
-    await application.initialize()
-    await application.start()
-    await application.bot.set_webhook(
-        url=f"{RENDER_EXTERNAL_URL}/{TOKEN}"
-    )
-
-loop.run_until_complete(init_app())
-
-
-@flask_app.route(f"/{TOKEN}", methods=["POST"])
-def webhook():
-    update = Update.de_json(request.get_json(force=True), application.bot)
-    loop.create_task(application.process_update(update))
-    return "ok", 200
-
-
-@flask_app.route("/")
-def health():
-    return "Bot is running", 200
-
-
-if __name__ == "__main__":
-    flask_app.run(host="0.0.0.0", port=PORT)
+print("Bot running...")
+application.run_polling()
