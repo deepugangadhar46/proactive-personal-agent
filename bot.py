@@ -106,20 +106,20 @@ async def natural_language_handler(update: Update, context: ContextTypes.DEFAULT
     if "tomorrow" in text:
         deadline = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
 
-    if "i need to" in text or "i have to" in text:
-        task = (
-            text.replace("i need to", "")
-            .replace("i have to", "")
-            .strip()
-        )
+    trigger_phrases = ["i need to", "i have to", "i should", "remind me to"]
 
-        cursor.execute(
-            "INSERT INTO tasks (task, deadline, status) VALUES (?, ?, ?)",
-            (task, deadline, "pending"),
-        )
-        conn.commit()
+    for phrase in trigger_phrases:
+        if phrase in text:
+            task = text.replace(phrase, "").strip()
 
-        await update.message.reply_text(f"✅ Added task: {task}")
+            cursor.execute(
+                "INSERT INTO tasks (task, deadline, status) VALUES (?, ?, ?)",
+                (task, deadline, "pending"),
+            )
+            conn.commit()
+
+            await update.message.reply_text(f"✅ Added task: {task}")
+            return
 
 # ==============================
 # DAILY CHECK-IN
@@ -160,5 +160,5 @@ application.job_queue.run_daily(
     time=time(hour=20, minute=0),
 )
 
-print("Bot running...")
+print("Bot running on Railway...")
 application.run_polling()
