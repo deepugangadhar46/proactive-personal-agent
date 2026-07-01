@@ -1,5 +1,8 @@
+# ==============================
+# IMPORTS
+# ==============================
+
 import os
-import sqlite3
 from datetime import datetime, timedelta, time
 
 from dotenv import load_dotenv
@@ -12,8 +15,13 @@ from telegram.ext import (
     filters,
 )
 
+# Import your architecture layers
+from agent.engine import create_task_from_text, list_tasks, complete_task
+from db.database import init_db
+
+
 # ==============================
-# LOAD ENV
+# ENVIRONMENT SETUP
 # ==============================
 
 load_dotenv()
@@ -22,25 +30,12 @@ TOKEN = os.getenv("TOKEN")
 if not TOKEN:
     raise ValueError("TOKEN not found in environment variables.")
 
-# ==============================
-# DATABASE
-# ==============================
+# Initialize database once when bot starts
+init_db()
 
-conn = sqlite3.connect("tasks.db", check_same_thread=False)
-cursor = conn.cursor()
-
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    task TEXT NOT NULL,
-    deadline TEXT,
-    status TEXT NOT NULL
-)
-""")
-conn.commit()
 
 # ==============================
-# COMMANDS
+# TELEGRAM HANDLERS
 # ==============================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -51,7 +46,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/done <id>"
     )
 
-async def add_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def add_task_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = " ".join(context.args)
 
     if not text:
@@ -64,40 +60,36 @@ async def add_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
         task = text
         deadline = None
 
-    cursor.execute(
-        "INSERT INTO tasks (task, deadline, status) VALUES (?, ?, ?)",
-        (task, deadline, "pending"),
-    )
-    conn.commit()
-
+    create_task_from_text(task, deadline)
     await update.message.reply_text(f"✅ Task added: {task}")
 
-async def show_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    cursor.execute("SELECT * FROM tasks WHERE status='pending'")
-    tasks = cursor.fetchall()
+
+async def show_tasks_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    tasks = list_tasks()
 
     if not tasks:
         await update.message.reply_text("🎉 No pending tasks.")
         return
 
     message = "📋 Pending Tasks:\n\n"
+
     for task in tasks:
         deadline_info = f" (Due: {task[2]})" if task[2] else ""
         message += f"{task[0]}. {task[1]}{deadline_info}\n"
 
     await update.message.reply_text(message)
 
-async def mark_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def done_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("Usage: /done <id>")
         return
 
     task_id = context.args[0]
-
-    cursor.execute("UPDATE tasks SET status='done' WHERE id=?", (task_id,))
-    conn.commit()
+    complete_task(task_id)
 
     await update.message.reply_text(f"✅ Task {task_id} marked as done!")
+
 
 async def natural_language_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.lower()
@@ -111,25 +103,20 @@ async def natural_language_handler(update: Update, context: ContextTypes.DEFAULT
     for phrase in trigger_phrases:
         if phrase in text:
             task = text.replace(phrase, "").strip()
-
-            cursor.execute(
-                "INSERT INTO tasks (task, deadline, status) VALUES (?, ?, ?)",
-                (task, deadline, "pending"),
-            )
-            conn.commit()
-
+            create_task_from_text(task, deadline)
             await update.message.reply_text(f"✅ Added task: {task}")
             return
+
 
 # ==============================
 # DAILY CHECK-IN
 # ==============================
 
-CHAT_ID = 1265910148  # keep your chat id
+CHAT_ID = 1265910148  # keep your chat ID
+
 
 async def daily_checkin(context: ContextTypes.DEFAULT_TYPE):
-    cursor.execute("SELECT * FROM tasks WHERE status='pending'")
-    tasks = cursor.fetchall()
+    tasks = list_tasks()
 
     if not tasks:
         message = "🎉 No pending tasks today."
@@ -141,16 +128,17 @@ async def daily_checkin(context: ContextTypes.DEFAULT_TYPE):
 
     await context.bot.send_message(chat_id=CHAT_ID, text=message)
 
+
 # ==============================
-# APP START
+# APPLICATION SETUP
 # ==============================
 
 application = ApplicationBuilder().token(TOKEN).build()
 
 application.add_handler(CommandHandler("start", start))
-application.add_handler(CommandHandler("addtask", add_task))
-application.add_handler(CommandHandler("tasks", show_tasks))
-application.add_handler(CommandHandler("done", mark_done))
+application.add_handler(CommandHandler("addtask", add_task_handler))
+application.add_handler(CommandHandler("tasks", show_tasks_handler))
+application.add_handler(CommandHandler("done", done_handler))
 application.add_handler(
     MessageHandler(filters.TEXT & ~filters.COMMAND, natural_language_handler)
 )
@@ -160,5 +148,5 @@ application.job_queue.run_daily(
     time=time(hour=20, minute=0),
 )
 
-print("Bot running on Railway...")
+print("Bot running...")
 application.run_polling()
